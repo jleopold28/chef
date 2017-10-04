@@ -2,49 +2,54 @@
 # vagrant package --base vagrant_master_* --output master.box
 
 # Dependency and config checks
-require_relative '../../vagrant/vagrant_utilities'
+require_relative 'vagrant_utilities'
 
-raise 'Missing PE Master tarball.' if Dir.glob('puppet-enterprise-*-el-7-x86_64.tar.gz').empty?
-
-plugins_install(%w[vagrant-pe_build])
+plugins_install(%w[vagrant-omnibus])
 
 # Configure boxes
 Vagrant.configure('2') do |config|
-  config.pe_build.version = '2016.4.7'
+  #config.omnibus.chef_version = :latest
   config.vm.box = 'centos/7'
-  config.pe_build.download_root = "file://#{Dir.pwd}"
-  config.ssh.insert_key = false
-  config.vm.provision 'shell', path: '../../vagrant/fix_resolv.sh'
-  # TODO: vb sync provider and sync code, puppet, r10k directories?
+  #config.ssh.insert_key = false
 
-  config.vm.define 'master' do |pm|
-    pm.vm.network 'private_network', ip: '192.168.123.10'
-    pm.vm.hostname = 'puppet.local'
+  config.vm.define 'chef-server' do |cs|
+    cs.vm.network 'private_network', ip: '192.168.123.10'
+    #cs.vm.network 'forwarded_port', guest: 80, host: 8080
+    cs.vm.hostname = 'chef-server'
 
-    pm.vm.provider 'virtualbox' do |vb|
+    cs.vm.provider 'virtualbox' do |vb|
       vb.cpus = '2'
-      vb.memory = '2560'
+      vb.memory = '2048'
     end
-
-    pm.vm.provision 'shell', path: 'base.sh'
-    pm.vm.provision 'shell', path: 'master.sh'
-    pm.vm.provision :pe_bootstrap do |pe|
-      pe.role = :master
-    end
-    pm.vm.provision 'shell', inline: '/opt/puppetlabs/bin/puppet agent -t; exit 0'
+    cs.vm.provision 'shell', path: 'provision/bootstrap.sh'
   end
+
 
   (1..3).each do |i|
     config.vm.define "node#{i}" do |node|
       node.vm.network 'private_network', ip: "192.168.123.1#{i}"
+      #node.vm.network 'forwarded_port', guest: 80, host: 8080
       node.vm.hostname = "node#{i}"
-      node.vm.synced_folder '.', '/vagrant', disabled: true
-
-      node.vm.provision 'shell', path: 'base.sh'
-      node.vm.provision :pe_agent do |pe|
-        pe.master_vm = 'master'
+      
+      node.vm.provider 'virtualbox' do |vb|
+        vb.memory = '512'
       end
-      node.vm.provision 'shell', inline: 'systemctl disable puppet; systemctl stop puppet'
+
+      node.vm.synced_folder '.', '/vagrant', disabled: true
+      node.vm.provision 'shell', path: 'provision/nodes.sh'
     end
   end
+
+  config.vm.define 'workstation' do |ws|
+    ws.vm.network 'private_network', ip: "192.168.123.14"
+    ws.vm.hostname = "workstation"
+
+    ws.vm.provider 'virtualbox' do |vb|
+      vb.cpus = '1'
+      vb.memory = '1024'
+    end
+    
+    ws.vm.provision 'shell', path: 'provision/workstation.sh'
+  end
+
 end
