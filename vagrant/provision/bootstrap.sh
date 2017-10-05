@@ -1,13 +1,21 @@
-# shutdown firewall
+#!/bin/bash
+
+# Shutdown firewall
 systemctl disable firewalld
 systemctl stop firewalld
 
-yum -y install wget
+# Install wget
+if ! rpm -qa | grep wget; then
+  yum -y install wget
+fi
+
 chown -R vagrant:vagrant /home/vagrant
-mkdir /home/vagrant/certs
+if [ ! -d "/home/vagrant/certs" ]; then
+  mkdir /home/vagrant/certs
+fi
 
 # Download and install Chef Server RPM
-if [ ! -f /tmp/chef-server-core*.rpm ]; then
+if ! rpm -qa | grep chef-server-core; then
   wget https://packages.chef.io/files/stable/chef-server/12.16.14/el/7/chef-server-core-12.16.14-1.el7.x86_64.rpm -P /tmp
   rpm -Uvh /tmp/chef-server-core-*.rpm
   
@@ -29,6 +37,7 @@ if [ ! -f /tmp/chef-server-core*.rpm ]; then
   chef-server-ctl install chef-manage
 fi
 
+if ! grep -q "192.168.123.10 chef-server" /etc/hosts; then
 cat >> /etc/hosts <<EOL
 192.168.123.10 chef-server
 192.168.123.11 node1
@@ -36,5 +45,6 @@ cat >> /etc/hosts <<EOL
 192.168.123.13 node3
 192.168.123.14 workstation
 EOL
+fi
 
 echo "Chef Console is ready: https://chef-server with login: james password: password"
